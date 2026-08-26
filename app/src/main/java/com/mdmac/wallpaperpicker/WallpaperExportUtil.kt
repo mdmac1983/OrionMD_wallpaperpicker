@@ -15,19 +15,19 @@ import android.graphics.Typeface
  *
  * EXPORT CANVAS: fixed at 600x1024 px to match the target Android 10
  * tablet's native resolution. [exportDpi] is the virtual density used to
- * convert "1 inch of bottom padding" and the 12-40 font-size slider into
- * actual pixels on that canvas — exposed as its own 0-200 slider so it can
- * be tuned by eye against the real device instead of being hardcoded.
- * 160 (mdpi) is the baseline where 1dp == 1px.
+ * convert "1 inch of bottom padding" and the 30-60 font-size slider into
+ * actual pixels on that canvas — exposed as its own 120-170 slider so it
+ * can be tuned by eye against the real device instead of being hardcoded.
+ * 135 is the default/baseline where the chosen sp value maps 1:1 to px.
  */
 object WallpaperExportUtil {
 
     const val EXPORT_WIDTH = 600
     const val EXPORT_HEIGHT = 1024
 
-    const val DEFAULT_EXPORT_DPI = 160f
-    const val EXPORT_DPI_MIN = 0
-    const val EXPORT_DPI_MAX = 200
+    const val DEFAULT_EXPORT_DPI = 135f
+    const val EXPORT_DPI_MIN = 120
+    const val EXPORT_DPI_MAX = 170
 
     private const val BOTTOM_PADDING_INCHES = 1f // "~1 inch from the bottom"
 
@@ -37,17 +37,17 @@ object WallpaperExportUtil {
     private const val SHADOW_DX = 0f    // "distance 0" / "direction 0" -> no offset,
     private const val SHADOW_DY = 0f    // just a soft edge
 
-    const val FONT_SIZE_MIN = 12
-    const val FONT_SIZE_MAX = 40
+    const val FONT_SIZE_MIN = 30
+    const val FONT_SIZE_MAX = 60
 
     /**
      * Center-crops/scales [source] to fill EXPORT_WIDTH x EXPORT_HEIGHT
      * (same behavior as the system wallpaper cropper), then draws [text]
      * bottom-center anchored if it isn't blank.
      *
-     * @param fontSizeSp value from the 12-40 slider, already clamped by the caller
-     * @param exportDpi value from the 0-200 DPI slider; scales both the
-     *   bottom padding and the font size. Defaults to 160 (mdpi baseline).
+     * @param fontSizeSp value from the 30-60 slider, already clamped by the caller
+     * @param exportDpi value from the 120-170 DPI slider; scales both the
+     *   bottom padding and the font size. Defaults to 135.
      */
     fun buildFinalBitmap(
         text: String?,
