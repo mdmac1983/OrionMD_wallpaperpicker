@@ -10,7 +10,6 @@ on:
 
 permissions:
   contents: write
-  workflows: write
 
 jobs:
   extract:
@@ -29,16 +28,17 @@ jobs:
           mkdir -p /tmp/extracted
           unzip -o "$ZIP" -d /tmp/extracted
 
-          # If the zip has a single top-level folder (e.g. OrionMD_wallpaperpicker/),
-          # flatten its contents up into the repo root instead of nesting it.
           TOP_LEVEL=$(find /tmp/extracted -mindepth 1 -maxdepth 1)
           COUNT=$(echo "$TOP_LEVEL" | wc -l)
           if [ "$COUNT" -eq 1 ] && [ -d "$TOP_LEVEL" ]; then
-            cp -r "$TOP_LEVEL"/. .
+            SRC="$TOP_LEVEL"
           else
-            cp -r /tmp/extracted/. .
+            SRC="/tmp/extracted"
           fi
 
+          # Skip .github/workflows/** here — GITHUB_TOKEN can never create or
+          # update workflow files, no matter what permission is granted.
+          rsync -a --exclude='.github/workflows/' "$SRC"/ .
           rm -f "$ZIP"
 
       - name: Commit extracted files
@@ -49,6 +49,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "Nothing to commit"
           else
-            git commit -m "Extract ${{ github.event.inputs.zip_path }} via workflow"
+            git commit -m "Extract ${{ github.event.inputs.zip_path }} via workflow (excluding workflow files)"
             git push
           fi
