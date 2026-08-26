@@ -1,148 +1,123 @@
 package com.mdmac.wallpaperpicker
 
+import android.app.WallpaperManager
+import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.os.Bundle
-import android.view.LayoutInflater
-import android.widget.EditText
-import android.widget.ImageView
-import android.widget.SeekBar
-import android.widget.TextView
-import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatActivity
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Rect
+import android.graphics.Typeface
 
-class MainActivity : AppCompatActivity() {
+/**
+ * Composites the selected wallpaper with an optional custom text overlay,
+ * then applies it as the home screen and/or lock screen wallpaper.
+ *
+ * EXPORT CANVAS: fixed at 600x1024 px to match the target Android 10
+ * tablet's native resolution. [exportDpi] is the virtual density used to
+ * convert "1 inch of bottom padding" and the 30-60 font-size slider into
+ * actual pixels on that canvas — exposed as its own 120-170 slider so it
+ * can be tuned by eye against the real device instead of being hardcoded.
+ * 135 is the default/baseline where the chosen sp value maps 1:1 to px.
+ */
+object WallpaperExportUtil {
 
-    private lateinit var imgPreview: ImageView
-    private lateinit var adapter: WallpaperThumbAdapter
+    const val EXPORT_WIDTH = 600
+    const val EXPORT_HEIGHT = 1024
 
-    /** What's currently shown in the big preview / would be applied if "Set wallpaper" is tapped. */
-    private var currentSource: WallpaperSource =
-        WallpaperSource.Bundled(BundledWallpapers.all.first())
+    const val DEFAULT_EXPORT_DPI = 135f
+    const val EXPORT_DPI_MIN = 120
+    const val EXPORT_DPI_MAX = 170
 
-    private val pickImageLauncher =
-        registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-            if (uri != null) {
-                currentSource = WallpaperSource.Gallery(uri)
-                adapter.setSelected(-1) // clear bundled-strip selection highlight
-                imgPreview.setImageURI(uri)
-            }
-        }
+    private const val BOTTOM_PADDING_INCHES = 1f // "~1 inch from the bottom"
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+    private val TEXT_COLOR = Color.parseColor("#CCFFFFFF") // 80% white
+    private val SHADOW_COLOR = Color.argb(128, 0, 0, 0)    // slight outer shadow
+    private const val SHADOW_BLUR = 1f  // "blur effect 1"
+    private const val SHADOW_DX = 0f    // "distance 0" / "direction 0" -> no offset,
+    private const val SHADOW_DY = 0f    // just a soft edge
 
-        imgPreview = findViewById(R.id.imgPreview)
-        val recyclerThumbs = findViewById<RecyclerView>(R.id.recyclerThumbs)
-        val btnSetWallpaper = findViewById<android.view.View>(R.id.btnSetWallpaper)
+    const val FONT_SIZE_MIN = 30
+    const val FONT_SIZE_MAX = 60
 
-        // Show the first bundled wallpaper by default
-        imgPreview.setImageResource(currentSource.let {
-            (it as WallpaperSource.Bundled).wallpaper.drawableResId
-        })
-
-        adapter = WallpaperThumbAdapter(
-            wallpapers = BundledWallpapers.all,
-            onWallpaperClicked = { wallpaper ->
-                currentSource = WallpaperSource.Bundled(wallpaper)
-                imgPreview.setImageResource(wallpaper.drawableResId)
-            },
-            onAddFromGalleryClicked = { pickImageLauncher.launch("image/*") }
-        )
-        adapter.setSelected(0)
-        recyclerThumbs.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
-        recyclerThumbs.adapter = adapter
-
-        btnSetWallpaper.setOnClickListener { promptCustomTextThenApply() }
-    }
-
-    // ---- Set-wallpaper flow: text overlay -> target (home/lock/both) -> apply ----
-
-    private fun promptCustomTextThenApply() {
-        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_wallpaper_text, null)
-
-        val editText = dialogView.findViewById<EditText>(R.id.editWallpaperText)
-        val seekFont = dialogView.findViewById<SeekBar>(R.id.seekFontSize)
-        val labelFont = dialogView.findViewById<TextView>(R.id.labelFontSize)
-        val seekDpi = dialogView.findViewById<SeekBar>(R.id.seekDpi)
-        val labelDpi = dialogView.findViewById<TextView>(R.id.labelDpi)
-
-        val defaultSp = 24
-        seekFont.progress = defaultSp - WallpaperExportUtil.FONT_SIZE_MIN
-        labelFont.text = getString(R.string.font_size_label, defaultSp)
-        seekFont.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(sb: SeekBar, progress: Int, fromUser: Boolean) {
-                labelFont.text = getString(
-                    R.string.font_size_label,
-                    progress + WallpaperExportUtil.FONT_SIZE_MIN
-                )
-            }
-            override fun onStartTrackingTouch(sb: SeekBar) {}
-            override fun onStopTrackingTouch(sb: SeekBar) {}
-        })
-
-        seekDpi.max = WallpaperExportUtil.EXPORT_DPI_MAX
-        seekDpi.progress = WallpaperExportUtil.DEFAULT_EXPORT_DPI.toInt()
-        labelDpi.text = getString(R.string.export_dpi_label, seekDpi.progress)
-        seekDpi.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(sb: SeekBar, progress: Int, fromUser: Boolean) {
-                labelDpi.text = getString(R.string.export_dpi_label, progress)
-            }
-            override fun onStartTrackingTouch(sb: SeekBar) {}
-            override fun onStopTrackingTouch(sb: SeekBar) {}
-        })
-
-        AlertDialog.Builder(this)
-            .setTitle(R.string.dialog_add_text_title)
-            .setView(dialogView)
-            .setPositiveButton("Next") { _, _ ->
-                val text = editText.text?.toString()
-                val fontSizeSp = (seekFont.progress + WallpaperExportUtil.FONT_SIZE_MIN).toFloat()
-                val exportDpi = seekDpi.progress.toFloat()
-                promptWallpaperTarget(text, fontSizeSp, exportDpi)
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
-    }
-
-    private fun promptWallpaperTarget(text: String?, fontSizeSp: Float, exportDpi: Float) {
-        val options = arrayOf(
-            getString(R.string.target_home),
-            getString(R.string.target_lock),
-            getString(R.string.target_both)
-        )
-        AlertDialog.Builder(this)
-            .setTitle(R.string.dialog_target_title)
-            .setItems(options) { _, which ->
-                val target = when (which) {
-                    0 -> WallpaperExportUtil.WallpaperTarget.HOME
-                    1 -> WallpaperExportUtil.WallpaperTarget.LOCK
-                    else -> WallpaperExportUtil.WallpaperTarget.BOTH
-                }
-                applySelectedWallpaper(text, fontSizeSp, exportDpi, target)
-            }
-            .show()
-    }
-
-    private fun applySelectedWallpaper(
+    /**
+     * Center-crops/scales [source] to fill EXPORT_WIDTH x EXPORT_HEIGHT
+     * (same behavior as the system wallpaper cropper), then draws [text]
+     * bottom-center anchored if it isn't blank.
+     *
+     * @param fontSizeSp value from the 30-60 slider, already clamped by the caller
+     * @param exportDpi value from the 120-170 DPI slider; scales both the
+     *   bottom padding and the font size. Defaults to 135.
+     */
+    fun buildFinalBitmap(
         text: String?,
         fontSizeSp: Float,
-        exportDpi: Float,
-        target: WallpaperExportUtil.WallpaperTarget
-    ) {
-        val bitmap: Bitmap = when (val source = currentSource) {
-            is WallpaperSource.Bundled ->
-                BitmapFactory.decodeResource(resources, source.wallpaper.drawableResId)
-            is WallpaperSource.Gallery ->
-                contentResolver.openInputStream(source.uri).use { BitmapFactory.decodeStream(it) }
+        source: Bitmap,
+        exportDpi: Float = DEFAULT_EXPORT_DPI
+    ): Bitmap {
+        val output = Bitmap.createBitmap(EXPORT_WIDTH, EXPORT_HEIGHT, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(output)
+
+        val srcRatio = source.width.toFloat() / source.height.toFloat()
+        val dstRatio = EXPORT_WIDTH.toFloat() / EXPORT_HEIGHT.toFloat()
+        val srcRect: Rect = if (srcRatio > dstRatio) {
+            // source wider than target -> crop left/right
+            val cropWidth = (source.height * dstRatio).toInt()
+            val left = (source.width - cropWidth) / 2
+            Rect(left, 0, left + cropWidth, source.height)
+        } else {
+            // source taller than target -> crop top/bottom
+            val cropHeight = (source.width / dstRatio).toInt()
+            val top = (source.height - cropHeight) / 2
+            Rect(0, top, source.width, top + cropHeight)
         }
-        val finalBitmap = WallpaperExportUtil.buildFinalBitmap(text, fontSizeSp, bitmap, exportDpi)
-        WallpaperExportUtil.applyWallpaper(this, finalBitmap, target)
-        Toast.makeText(this, R.string.wallpaper_set_confirmation, Toast.LENGTH_SHORT).show()
+        canvas.drawBitmap(source, srcRect, Rect(0, 0, EXPORT_WIDTH, EXPORT_HEIGHT), null)
+
+        if (!text.isNullOrBlank()) {
+            drawOverlayText(canvas, text, fontSizeSp, exportDpi)
+        }
+        return output
+    }
+
+    private fun drawOverlayText(canvas: Canvas, text: String, fontSizeSp: Float, exportDpi: Float) {
+        val clampedSize = fontSizeSp.coerceIn(FONT_SIZE_MIN.toFloat(), FONT_SIZE_MAX.toFloat())
+        val densityScale = exportDpi / DEFAULT_EXPORT_DPI
+
+        // Roboto is Android's system default sans-serif face, so no bundled
+        // .ttf is required to get it.
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = Typeface.create("sans-serif", Typeface.NORMAL)
+            textSize = clampedSize * densityScale
+            color = TEXT_COLOR
+            textAlign = Paint.Align.CENTER
+            setShadowLayer(
+                SHADOW_BLUR * densityScale.coerceAtLeast(0.01f),
+                SHADOW_DX,
+                SHADOW_DY,
+                SHADOW_COLOR
+            )
+        }
+
+        val bottomPaddingPx = BOTTOM_PADDING_INCHES * exportDpi
+        val x = EXPORT_WIDTH / 2f
+        // Anchor point sits bottomPaddingPx above the bottom edge; centering
+        // the glyphs' own vertical extent on that point (rather than the raw
+        // baseline) keeps the visual gap accurate regardless of font size.
+        val anchorY = EXPORT_HEIGHT - bottomPaddingPx
+        val baseline = anchorY - (paint.descent() + paint.ascent()) / 2f
+        canvas.drawText(text, x, baseline, paint)
+    }
+
+    enum class WallpaperTarget { HOME, LOCK, BOTH }
+
+    /** Applies [bitmap] as wallpaper for the chosen [target] (API 24+, fine on Android 10). */
+    fun applyWallpaper(context: Context, bitmap: Bitmap, target: WallpaperTarget) {
+        val manager = WallpaperManager.getInstance(context)
+        val flags = when (target) {
+            WallpaperTarget.HOME -> WallpaperManager.FLAG_SYSTEM
+            WallpaperTarget.LOCK -> WallpaperManager.FLAG_LOCK
+            WallpaperTarget.BOTH -> WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK
+        }
+        manager.setBitmap(bitmap, null, true, flags)
     }
 }
