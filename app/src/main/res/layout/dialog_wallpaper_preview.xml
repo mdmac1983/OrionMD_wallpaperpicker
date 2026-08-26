@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <!-- Fixed height keeps this readable inside the dialog regardless of
+         screen size; scaleType=fitCenter preserves the 600x1024 aspect
+         ratio without distortion, same crop/text placement as the final. -->
+    <ImageView
+        android:id="@+id/imgWallpaperPreview"
+        android:layout_width="match_parent"
+        android:layout_height="420dp"
+        android:scaleType="fitCenter"
+        android:background="#000000"
+        android:contentDescription="@string/wallpaper_preview" />
+
+</LinearLayout>
