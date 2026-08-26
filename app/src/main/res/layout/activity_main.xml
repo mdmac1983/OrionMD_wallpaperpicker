@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <ImageView
+        android:id="@+id/imgPreview"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:contentDescription="@null" />
+
+    <!-- Top scrim + "Set wallpaper" confirm row -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="96dp"
+        android:layout_gravity="top"
+        android:background="@drawable/scrim_top">
+
+        <LinearLayout
+            android:id="@+id/btnSetWallpaper"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:layout_marginStart="16dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?android:attr/selectableItemBackground"
+            android:padding="8dp">
+
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_check"
+                android:contentDescription="@null" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:text="@string/set_wallpaper"
+                android:textColor="@color/white"
+                android:textSize="16sp"
+                android:fontFamily="sans-serif-medium" />
+
+        </LinearLayout>
+
+    </FrameLayout>
+
+    <!-- Bottom scrim + thumbnail strip -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="112dp"
+        android:layout_gravity="bottom"
+        android:background="@drawable/scrim_bottom">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recyclerThumbs"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:clipToPadding="false"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:orientation="horizontal"
+            tools:listitem="@layout/item_wallpaper_thumb" />
+
+    </FrameLayout>
+
+</FrameLayout>

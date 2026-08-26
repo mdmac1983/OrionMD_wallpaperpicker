@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">OrionMD Wallpapers</string>
+    <string name="set_wallpaper">Set wallpaper</string>
+    <string name="add_from_gallery">From gallery</string>
+    <string name="dialog_add_text_title">Add text (optional)</string>
+    <string name="dialog_target_title">Set wallpaper for</string>
+    <string name="target_home">Home screen</string>
+    <string name="target_lock">Lock screen</string>
+    <string name="target_both">Both</string>
+    <string name="wallpaper_set_confirmation">Wallpaper set</string>
+    <string name="font_size_label">Font size: %1$d</string>
+    <string name="export_dpi_label">Export DPI: %1$d</string>
+    <string name="custom_text_hint">Custom text (optional)</string>
+</resources>
