@@ -5,8 +5,8 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Matrix
 import android.graphics.Paint
-import android.graphics.Rect
 import android.graphics.Typeface
 
 /**
@@ -15,12 +15,10 @@ import android.graphics.Typeface
  *
  * EXPORT CANVAS: fixed at 600x1024 px (portrait) to match the target
  * Android 10 tablet's actual screen. The bundled wallpapers are landscape
- * (960x800, ratio 1.2) — cropping them to exactly fill a 0.586-ratio
- * portrait canvas would throw away more than half the image width, which
- * is what "zoomed in" was. Instead: the full photo is scaled to fit
- * uncropped (letterboxed), centered, and the leftover top/bottom space is
- * filled with a blurred, edge-to-edge stretched copy of the same photo
- * instead of a hard crop or blank bars.
+ * (960x800). To fill the portrait canvas edge-to-edge with no crop and no
+ * letterbox/blur bands, the source is rotated 90° counter-clockwise
+ * (960x800 -> 800x960, already portrait-shaped) and then stretched
+ * (squeezed horizontally, stretched vertically) to exactly 600x1024.
  *
  * [exportDpi] is the virtual density used to convert "1 inch of bottom
  * padding" and the 30-60 font-size slider into actual pixels on that
@@ -49,10 +47,9 @@ object WallpaperExportUtil {
     const val FONT_SIZE_MAX = 60
 
     /**
-     * Builds the final wallpaper: blurred cover-fill background (no crop
-     * math visible to the eye, just soft filler), the full source photo
-     * centered on top with no cropping, then [text] bottom-center anchored
-     * if it isn't blank.
+     * Rotates [source] 90° counter-clockwise, stretches it to exactly
+     * EXPORT_WIDTH x EXPORT_HEIGHT (full-bleed, no crop, no bars), then
+     * draws [text] bottom-center anchored if it isn't blank.
      *
      * @param fontSizeSp value from the 30-60 slider, already clamped by the caller
      * @param exportDpi value from the 120-170 DPI slider; scales both the
@@ -67,17 +64,9 @@ object WallpaperExportUtil {
         val output = Bitmap.createBitmap(EXPORT_WIDTH, EXPORT_HEIGHT, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(output)
 
-        // Blurred, edge-to-edge background fills any leftover space instead
-        // of a hard crop or a blank bar.
-        val coverBackground = buildCoverBitmap(source, EXPORT_WIDTH, EXPORT_HEIGHT)
-        val blurredBackground = cheapBlur(coverBackground)
-        canvas.drawBitmap(blurredBackground, 0f, 0f, null)
-
-        // The actual photo, fully visible and uncropped, centered on top.
-        val contained = buildContainBitmap(source, EXPORT_WIDTH, EXPORT_HEIGHT)
-        val left = (EXPORT_WIDTH - contained.width) / 2f
-        val top = (EXPORT_HEIGHT - contained.height) / 2f
-        canvas.drawBitmap(contained, left, top, null)
+        val rotated = rotate90CounterClockwise(source)
+        val stretched = Bitmap.createScaledBitmap(rotated, EXPORT_WIDTH, EXPORT_HEIGHT, true)
+        canvas.drawBitmap(stretched, 0f, 0f, null)
 
         if (!text.isNullOrBlank()) {
             drawOverlayText(canvas, text, fontSizeSp, exportDpi)
@@ -85,39 +74,10 @@ object WallpaperExportUtil {
         return output
     }
 
-    /** Scales/crops [source] to exactly fill [targetW]x[targetH] with no gaps (same as a standard center-crop). */
-    private fun buildCoverBitmap(source: Bitmap, targetW: Int, targetH: Int): Bitmap {
-        val srcRatio = source.width.toFloat() / source.height.toFloat()
-        val dstRatio = targetW.toFloat() / targetH.toFloat()
-        val srcRect: Rect = if (srcRatio > dstRatio) {
-            val cropWidth = (source.height * dstRatio).toInt()
-            val left = (source.width - cropWidth) / 2
-            Rect(left, 0, left + cropWidth, source.height)
-        } else {
-            val cropHeight = (source.width / dstRatio).toInt()
-            val top = (source.height - cropHeight) / 2
-            Rect(0, top, source.width, top + cropHeight)
-        }
-        val out = Bitmap.createBitmap(targetW, targetH, Bitmap.Config.ARGB_8888)
-        Canvas(out).drawBitmap(source, srcRect, Rect(0, 0, targetW, targetH), null)
-        return out
-    }
-
-    /** Scales [source] down (never crops) so it fits entirely within [maxW]x[maxH]. */
-    private fun buildContainBitmap(source: Bitmap, maxW: Int, maxH: Int): Bitmap {
-        val scale = minOf(maxW.toFloat() / source.width, maxH.toFloat() / source.height)
-        val w = (source.width * scale).toInt().coerceAtLeast(1)
-        val h = (source.height * scale).toInt().coerceAtLeast(1)
-        return Bitmap.createScaledBitmap(source, w, h, true)
-    }
-
-    /** Cheap, dependency-free blur (no RenderScript/RenderEffect needed): downscale then upscale with bilinear filtering. */
-    private fun cheapBlur(bitmap: Bitmap): Bitmap {
-        val factor = 0.06f // ~16x downscale, then back up
-        val smallW = (bitmap.width * factor).toInt().coerceAtLeast(1)
-        val smallH = (bitmap.height * factor).toInt().coerceAtLeast(1)
-        val small = Bitmap.createScaledBitmap(bitmap, smallW, smallH, true)
-        return Bitmap.createScaledBitmap(small, bitmap.width, bitmap.height, true)
+    /** Rotates [source] 90° counter-clockwise (e.g. 960x800 -> 800x960). */
+    private fun rotate90CounterClockwise(source: Bitmap): Bitmap {
+        val matrix = Matrix().apply { postRotate(-90f) }
+        return Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, true)
     }
 
     private fun drawOverlayText(canvas: Canvas, text: String, fontSizeSp: Float, exportDpi: Float) {
