@@ -1,7 +1,8 @@
 package com.mdmac.wallpaperpicker
 
+import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
+import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.widget.EditText
@@ -17,6 +18,8 @@ import androidx.recyclerview.widget.RecyclerView
 
 class MainActivity : AppCompatActivity() {
 
+    private val supportUrl = "https://buymeacoffee.com/mdmac1983"
+
     private lateinit var imgPreview: ImageView
     private lateinit var adapter: WallpaperThumbAdapter
 
@@ -29,7 +32,7 @@ class MainActivity : AppCompatActivity() {
             if (uri != null) {
                 currentSource = WallpaperSource.Gallery(uri)
                 adapter.setSelected(-1) // clear bundled-strip selection highlight
-                imgPreview.setImageURI(uri)
+                imgPreview.setImageBitmap(OrientedBitmapLoader.fromUri(this, uri))
             }
         }
 
@@ -42,15 +45,18 @@ class MainActivity : AppCompatActivity() {
         val btnSetWallpaper = findViewById<android.view.View>(R.id.btnSetWallpaper)
 
         // Show the first bundled wallpaper by default
-        imgPreview.setImageResource(currentSource.let {
-            (it as WallpaperSource.Bundled).wallpaper.drawableResId
-        })
+        imgPreview.setImageBitmap(
+            OrientedBitmapLoader.fromResource(
+                this,
+                (currentSource as WallpaperSource.Bundled).wallpaper.drawableResId
+            )
+        )
 
         adapter = WallpaperThumbAdapter(
             wallpapers = BundledWallpapers.all,
             onWallpaperClicked = { wallpaper ->
                 currentSource = WallpaperSource.Bundled(wallpaper)
-                imgPreview.setImageResource(wallpaper.drawableResId)
+                imgPreview.setImageBitmap(OrientedBitmapLoader.fromResource(this, wallpaper.drawableResId))
             },
             onAddFromGalleryClicked = { pickImageLauncher.launch("image/*") }
         )
@@ -59,9 +65,13 @@ class MainActivity : AppCompatActivity() {
         recyclerThumbs.adapter = adapter
 
         btnSetWallpaper.setOnClickListener { promptCustomTextThenApply() }
+
+        findViewById<android.view.View>(R.id.btnSupport).setOnClickListener {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(supportUrl)))
+        }
     }
 
-    // ---- Set-wallpaper flow: text overlay -> preview -> target (home/lock/both) -> apply ----
+    // ---- Set-wallpaper flow: text overlay -> target (home/lock/both) -> apply ----
 
     private fun promptCustomTextThenApply() {
         val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_wallpaper_text, null)
@@ -124,9 +134,9 @@ class MainActivity : AppCompatActivity() {
     ): Bitmap {
         val sourceBitmap: Bitmap = when (val source = currentSource) {
             is WallpaperSource.Bundled ->
-                BitmapFactory.decodeResource(resources, source.wallpaper.drawableResId)
+                OrientedBitmapLoader.fromResource(this, source.wallpaper.drawableResId)
             is WallpaperSource.Gallery ->
-                contentResolver.openInputStream(source.uri).use { BitmapFactory.decodeStream(it) }
+                OrientedBitmapLoader.fromUri(this, source.uri)
         }
         return WallpaperExportUtil.buildFinalBitmap(text, fontSizeSp, sourceBitmap, exportDpi)
     }
